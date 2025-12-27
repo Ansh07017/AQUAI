@@ -32,7 +32,9 @@ import {
   BookOpen,
   ArrowRight,
   Sun,
-  Moon
+  Moon,
+  Crosshair,
+  Plus
 } from 'lucide-react';
 import { 
   XAxis, 
@@ -66,6 +68,7 @@ const App: React.FC = () => {
   const [confidenceScore, setConfidenceScore] = useState(94.2);
   const [isLoading, setIsLoading] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
+  const [isLocating, setIsLocating] = useState(false);
 
   // Manual Input State
   const [manualFields, setManualFields] = useState({
@@ -75,6 +78,8 @@ const App: React.FC = () => {
     fecal: 500,
     conductivity: 500
   });
+
+  const [customLoc, setCustomLoc] = useState({ name: '', state: '' });
 
   const MANUAL_FIELD_LABELS: Record<string, string> = {
     ph: "pH (6.5-8.5)",
@@ -107,6 +112,13 @@ const App: React.FC = () => {
 
   const handlePredict = async (data: SensorData) => {
     setIsLoading(true);
+    
+    // Simulate dynamic model fidelity based on data variance
+    const variance = Math.abs(data.ph - 7.0) + Math.abs(data.dissolvedOxygen - 6.0) / 5;
+    const fidelityShift = (Math.random() - 0.5) * 2; // small random jitter
+    const newFidelity = Math.min(99.8, Math.max(88.5, 96.5 - variance + fidelityShift));
+    setConfidenceScore(newFidelity);
+
     const severity = randomForestRegressor(data);
     const status = randomForestClassifier(severity, data);
     const localDiseases = predictDiseaseProbabilities(data);
@@ -148,6 +160,61 @@ const App: React.FC = () => {
     const data = generateMockData(loc);
     setCurrentData(data);
     handlePredict(data);
+  };
+
+  const detectLocation = async () => {
+    setIsLocating(true);
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser");
+      setIsLocating(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        let locationName = "Current Research Site";
+        let stateName = "Detected Location";
+
+        try {
+          // Use OpenStreetMap Nominatim for free reverse geocoding to get a real name
+          const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10`);
+          const data = await response.json();
+          if (data && data.address) {
+            locationName = data.address.city || data.address.town || data.address.village || data.address.suburb || "Local Watershed";
+            stateName = data.address.state || data.address.country || "Detected Zone";
+          }
+        } catch (e) {
+          console.warn("Reverse geocoding failed, using coordinates as name.");
+          locationName = `Lat: ${latitude.toFixed(2)}, Lng: ${longitude.toFixed(2)}`;
+        }
+
+        const newLoc = {
+          lat: latitude,
+          lng: longitude,
+          name: locationName,
+          state: stateName
+        };
+        handleLocationChange(newLoc);
+        setIsLocating(false);
+      },
+      () => {
+        alert("Unable to retrieve your location");
+        setIsLocating(false);
+      }
+    );
+  };
+
+  const addCustomLocation = () => {
+    if (!customLoc.name || !customLoc.state) return;
+    const newLoc = {
+      lat: 0,
+      lng: 0,
+      name: customLoc.name,
+      state: customLoc.state
+    };
+    handleLocationChange(newLoc);
+    setCustomLoc({ name: '', state: '' });
   };
 
   const handleFeedback = (isAccurate: boolean) => {
@@ -224,7 +291,7 @@ const App: React.FC = () => {
             </h2>
             <div className={`flex items-center text-[10px] font-bold uppercase tracking-widest mt-1 ${themeClasses.textMuted}`}>
               <MapPin className="w-3 h-3 mr-1 text-sky-500" />
-              {selectedLocation.name}
+              {selectedLocation.name} {selectedLocation.state ? `• ${selectedLocation.state}` : ''}
             </div>
           </div>
           
@@ -455,7 +522,7 @@ const App: React.FC = () => {
                     </div>
                  </div>
                  <div className="mt-20 text-center pb-10">
-                    <p className={`text-[10px] font-black uppercase tracking-[0.4em] ${themeClasses.textMuted}`}>Powered by Aquai & Google Gemini 3</p>
+                    <p className={`text-[10px] font-black uppercase tracking-[0.4em] ${themeClasses.textMuted}`}>Powered by Leaders</p>
                  </div>
               </footer>
             </div>
@@ -525,21 +592,93 @@ const App: React.FC = () => {
           )}
           
           {activeTab === 'settings' && (
-            <div className={`max-w-4xl mx-auto ${themeClasses.card} p-8 md:p-12 rounded-[40px] md:rounded-[56px] border shadow-xl`}>
-                <h3 className={`text-2xl font-black mb-10 uppercase tracking-widest ${themeClasses.textPrimary}`}>Station Protocol</h3>
-                <p className={`${themeClasses.textMuted} font-bold text-sm mb-12`}>Select an active survey site to switch telemetry streams.</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 md:gap-8">
-                     {MOCK_LOCATIONS.map((loc, idx) => (
-                        <button key={idx} onClick={() => handleLocationChange(loc)} className={`flex items-start p-6 md:p-8 rounded-[32px] border-2 transition-all text-left group ${selectedLocation.name === loc.name ? 'border-sky-500 bg-sky-500/5 shadow-lg' : isDarkMode ? 'border-white/5 hover:border-white/10 hover:bg-white/5' : 'border-slate-100 hover:border-sky-200 hover:bg-sky-50'}`}>
-                          <div className={`p-4 rounded-2xl mr-6 transition-all ${selectedLocation.name === loc.name ? 'bg-sky-500 text-white shadow-xl scale-110' : isDarkMode ? 'bg-slate-950 text-slate-600' : 'bg-slate-100 text-slate-400'}`}>
-                            <MapPin className="w-5 h-5 md:w-6 md:h-6" />
-                          </div>
-                          <div>
-                            <p className={`font-black text-base md:text-lg transition-colors ${selectedLocation.name === loc.name ? 'text-sky-400' : themeClasses.textPrimary}`}>{loc.name}</p>
-                            <p className={`text-[10px] font-bold mt-2 uppercase tracking-widest ${themeClasses.textMuted}`}>{loc.state}</p>
-                          </div>
+            <div className="max-w-5xl mx-auto space-y-8">
+                {/* Current Active Location Card */}
+                <div className={`${themeClasses.card} p-8 rounded-[40px] border shadow-xl flex flex-col md:flex-row items-center justify-between gap-6`}>
+                    <div className="flex items-center space-x-6">
+                        <div className="p-4 bg-sky-500 text-white rounded-3xl shadow-lg shadow-sky-500/20">
+                            <Navigation className="w-8 h-8" />
+                        </div>
+                        <div>
+                            <p className={`text-[10px] font-black uppercase tracking-widest ${themeClasses.textMuted} mb-1`}>Active Telemetry Station</p>
+                            <h3 className={`text-2xl font-black ${themeClasses.textPrimary}`}>{selectedLocation.name}</h3>
+                            <p className="text-sky-500 font-bold text-sm">{selectedLocation.state || 'Manual Overlay'}</p>
+                        </div>
+                    </div>
+                    <div className={`${isDarkMode ? 'bg-slate-950' : 'bg-slate-100'} px-6 py-4 rounded-2xl border ${themeClasses.border} text-center w-full md:w-auto`}>
+                        <p className={`text-[10px] font-black uppercase tracking-widest ${themeClasses.textMuted}`}>Telemetry Reference</p>
+                        <p className={`font-mono text-xs md:text-sm font-bold ${themeClasses.textPrimary}`}>
+                          {selectedLocation.lat !== 0 ? `${selectedLocation.lat.toFixed(4)}, ${selectedLocation.lng.toFixed(4)}` : 'Manual Registry Site'}
+                        </p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* Automatic Detection */}
+                    <div className={`${themeClasses.card} p-8 rounded-[40px] border shadow-xl`}>
+                        <h4 className={`text-lg font-black mb-6 uppercase tracking-widest flex items-center ${themeClasses.textPrimary}`}>
+                            <Crosshair className="w-5 h-5 mr-3 text-sky-500" /> Automatic Calibration
+                        </h4>
+                        <p className={`${themeClasses.textMuted} text-sm mb-8 leading-relaxed`}>
+                            Use high-precision browser geolocation to sync the monitoring stream with your physical presence and local water bodies.
+                        </p>
+                        <button 
+                            onClick={detectLocation}
+                            disabled={isLocating}
+                            className="w-full bg-sky-600 hover:bg-sky-500 text-white font-black py-4 rounded-2xl flex items-center justify-center space-x-3 transition-all shadow-xl shadow-sky-600/10 disabled:opacity-50"
+                        >
+                            {isLocating ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Crosshair className="w-5 h-5" />}
+                            <span>{isLocating ? 'LOCATING...' : 'DETECT MY LOCATION'}</span>
                         </button>
-                      ))}
+                    </div>
+
+                    {/* Custom Manual Entry */}
+                    <div className={`${themeClasses.card} p-8 rounded-[40px] border shadow-xl`}>
+                        <h4 className={`text-lg font-black mb-6 uppercase tracking-widest flex items-center ${themeClasses.textPrimary}`}>
+                            <Plus className="w-5 h-5 mr-3 text-emerald-500" /> Manual Station Definition
+                        </h4>
+                        <div className="space-y-4">
+                            <input 
+                                type="text"
+                                placeholder="Station Name (e.g. My Lab Site)"
+                                value={customLoc.name}
+                                onChange={(e) => setCustomLoc(prev => ({...prev, name: e.target.value}))}
+                                className={`w-full ${themeClasses.innerBg} border ${themeClasses.border} rounded-xl px-4 py-3 font-bold focus:border-sky-500 outline-none transition-all ${themeClasses.textPrimary}`}
+                            />
+                            <input 
+                                type="text"
+                                placeholder="State / Region"
+                                value={customLoc.state}
+                                onChange={(e) => setCustomLoc(prev => ({...prev, state: e.target.value}))}
+                                className={`w-full ${themeClasses.innerBg} border ${themeClasses.border} rounded-xl px-4 py-3 font-bold focus:border-sky-500 outline-none transition-all ${themeClasses.textPrimary}`}
+                            />
+                            <button 
+                                onClick={addCustomLocation}
+                                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-4 rounded-2xl flex items-center justify-center space-x-3 transition-all shadow-xl shadow-emerald-600/10"
+                            >
+                                <Plus className="w-5 h-5" />
+                                <span>INITIALIZE STATION</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Pre-defined Station Registry */}
+                <div className={`${themeClasses.card} p-8 rounded-[40px] border shadow-xl`}>
+                    <h3 className={`text-xl font-black mb-8 uppercase tracking-widest ${themeClasses.textPrimary}`}>Site Registry</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                         {MOCK_LOCATIONS.map((loc, idx) => (
+                            <button key={idx} onClick={() => handleLocationChange(loc)} className={`flex items-start p-6 rounded-[32px] border-2 transition-all text-left group ${selectedLocation.name === loc.name ? 'border-sky-500 bg-sky-500/5 shadow-lg' : isDarkMode ? 'border-white/5 hover:border-white/10 hover:bg-white/5' : 'border-slate-100 hover:border-sky-200 hover:bg-sky-50'}`}>
+                              <div className={`p-4 rounded-2xl mr-4 transition-all ${selectedLocation.name === loc.name ? 'bg-sky-500 text-white shadow-xl' : isDarkMode ? 'bg-slate-950 text-slate-600' : 'bg-slate-100 text-slate-400'}`}>
+                                <MapPin className="w-5 h-5" />
+                              </div>
+                              <div className="flex-1 overflow-hidden">
+                                <p className={`font-black text-sm truncate transition-colors ${selectedLocation.name === loc.name ? 'text-sky-400' : themeClasses.textPrimary}`}>{loc.name}</p>
+                                <p className={`text-[10px] font-bold mt-1 uppercase tracking-widest ${themeClasses.textMuted}`}>{loc.state}</p>
+                              </div>
+                            </button>
+                          ))}
+                    </div>
                 </div>
             </div>
           )}
