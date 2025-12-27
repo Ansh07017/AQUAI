@@ -1,0 +1,7 @@
+{
+  "name": "Aquai - AI Water Quality Guardian",
+  "description": "A comprehensive AI-powered water quality monitoring and disease risk prediction system featuring real-time data simulation, probabilistic disease modeling, and a feedback-driven learning dashboard.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
