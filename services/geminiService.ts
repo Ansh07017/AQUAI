@@ -1,35 +1,31 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { SensorData, PredictionResult, SafetyStatus } from "../types";
+import { SensorData, PredictionResult, SafetyStatus, WaterSourceCategory } from "../types";
 
-// Always use the recommended initialization with named parameter and direct env access
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const analyzeWaterQuality = async (
   data: SensorData, 
-  localRF: { severity: number; status: SafetyStatus }
+  localStats: { severity: number; bioHazard: number; status: SafetyStatus; confidence: number; reliability: number }
 ): Promise<PredictionResult> => {
-  const prompt = `Act as a Senior Public Health Official.
-    LOCAL RF DIAGNOSTICS:
-    - Severity Score: ${localRF.severity}/100
-    - Safety Status: ${localRF.status}
+  const prompt = `Act as an Environmental Scientist and Policy Advisor.
+    CATEGORY: ${data.category}
+    STATUS: ${localStats.status}
+    SEVERITY: ${localStats.severity}/100
+    BIO-HAZARD POTENTIAL: ${localStats.bioHazard}/100
+    
+    TELEMETRY:
+    - pH: ${data.ph}, BOD: ${data.bod}mg/l, Turbidity: ${data.turbidity}NTU
+    - Fecal: ${data.fecalColiform} MPN, Nitrates: ${data.nitrate}mg/l, DO: ${data.dissolvedOxygen}mg/l
 
-    WATER QUALITY DATASET:
-    - B.O.D: ${data.bod} mg/l (Target < 3)
-    - D.O.: ${data.dissolvedOxygen} mg/l (Target > 4)
-    - pH Mean: ${data.ph}
-    - Fecal Coliform: ${data.fecalColiform} MPN/100ml
-    - Total Coliform: ${data.totalColiform} MPN/100ml
-    - Conductivity: ${data.conductivity} µmhos/cm
-    - Nitrate-N: ${data.nitrate} mg/l
+    TASK:
+    1. INFER ROOT CAUSE: Analyze relationship between Bio-Hazard and Chemical Severity.
+    2. COUNTERFACTUAL: State exactly what parameter change would make this SAFE.
+    3. POLICY RECOMMENDATION: Provide a professional governance statement.
+    4. DISEASE RISKS: 3 specific risks.
+    5. SUMMARY: 2-sentence diagnostic.
 
-    LOCATION: ${data.location.name}
-
-    YOUR TASK:
-    1. Provide a diagnostic 'Biological Risk Summary'.
-    2. Explain the relationship between the high B.O.D/Coliform levels and disease risks.
-    3. Generate 3 specific Probabilistic Disease Risks.
-    4. Format as JSON.`;
+    Format strictly as JSON.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -40,8 +36,10 @@ export const analyzeWaterQuality = async (
         responseSchema: {
           type: Type.OBJECT,
           properties: {
+            rootCause: { type: Type.STRING },
+            counterfactual: { type: Type.STRING },
+            policyRecommendation: { type: Type.STRING },
             aiSummary: { type: Type.STRING },
-            confidence: { type: Type.NUMBER },
             diseaseRisks: {
               type: Type.ARRAY,
               items: {
@@ -50,31 +48,39 @@ export const analyzeWaterQuality = async (
                   disease: { type: Type.STRING },
                   probability: { type: Type.NUMBER },
                   description: { type: Type.STRING }
-                },
-                required: ["disease", "probability", "description"]
+                }
               }
             }
           },
-          required: ["aiSummary", "confidence", "diseaseRisks"]
+          required: ["rootCause", "counterfactual", "policyRecommendation", "aiSummary", "diseaseRisks"]
         }
       }
     });
 
-    // Access the .text property directly and trim before parsing as per guidelines
     const result = JSON.parse(response.text.trim());
     return {
-      severityScore: localRF.severity,
-      status: localRF.status,
-      ...result
+      severityScore: localStats.severity,
+      bioHazardScore: localStats.bioHazard,
+      status: localStats.status,
+      confidence: localStats.confidence,
+      reliabilityIndex: localStats.reliability,
+      ...result,
+      modelType: data.category
     };
   } catch (error) {
-    console.error("Gemini Diagnosis Error:", error);
+    console.error("AI Diagnostic Failed:", error);
     return {
-      severityScore: localRF.severity,
-      status: localRF.status,
+      severityScore: localStats.severity,
+      bioHazardScore: localStats.bioHazard,
+      status: localStats.status,
+      confidence: localStats.confidence,
+      reliabilityIndex: localStats.reliability,
+      rootCause: "Data Pattern Inconclusive",
+      counterfactual: "Standard filtration required",
+      policyRecommendation: "Monitor station for next 24 hours",
+      aiSummary: "AI analysis unavailable. Reverting to local heuristic models.",
       diseaseRisks: [],
-      aiSummary: "The system detected critical biological contamination. Immediate boil-water advisory recommended.",
-      confidence: 0.8
+      modelType: data.category
     };
   }
 };

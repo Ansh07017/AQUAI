@@ -1,25 +1,20 @@
+
 {
-  "name": "aquai---ai-water-quality-guardian",
+  "name": "aquai-water-intelligence",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "server": "node server.js",
+    "dev:all": "concurrently \"npm run dev\" \"npm run server\"",
+    "build": "tsc && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
-    "recharts": "^3.6.0",
-    "lucide-react": "^0.562.0",
     "@google/genai": "^1.34.0",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
-    "d3": "^7.9.0"
-  },
-  "devDependencies": {
-    "@types/node": "^22.14.0",
-    "@vitejs/plugin-react": "^5.0.0",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.0"
-  }
-}
+    "cors": "^2.8.5",
+    "d3": "^7.9.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.1",
+    "lucide-react": "^

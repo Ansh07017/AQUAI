@@ -1,4 +1,25 @@
 
+export enum WaterSourceCategory {
+  RIVER = 'River',
+  GROUND_WATER = 'Ground Water',
+  MED_MIN_RIVERS = 'Med Min Rivers',
+  PONDS_LAKES = 'Ponds/Lakes',
+  DRAINS = 'Drains'
+}
+
+export enum DataMode {
+  SIMULATED = 'SIMULATED',
+  MANUAL = 'MANUAL',
+  HARDWARE = 'HARDWARE'
+}
+
+export enum HardwareStatus {
+  DISCONNECTED = 'DISCONNECTED',
+  CONNECTING = 'CONNECTING',
+  CONNECTED = 'CONNECTED',
+  ERROR = 'ERROR'
+}
+
 export interface SensorData {
   id: string;
   timestamp: Date;
@@ -6,10 +27,10 @@ export interface SensorData {
   turbidity: number;
   tds: number;
   temperature: number;
-  dissolvedOxygen: number; // D.O.
+  dissolvedOxygen: number;
   conductivity: number;
-  bod: number; // B.O.D.
-  nitrate: number; // Nitrate-N + Nitrite-N
+  bod: number;
+  nitrate: number;
   fecalColiform: number;
   totalColiform: number;
   location: {
@@ -18,6 +39,8 @@ export interface SensorData {
     name: string;
     state?: string;
   };
+  category: WaterSourceCategory;
+  rawBuffer?: string; // Hardware mode only
 }
 
 export enum SafetyStatus {
@@ -34,16 +57,14 @@ export interface DiseaseRisk {
 
 export interface PredictionResult {
   severityScore: number;
+  bioHazardScore: number;
   status: SafetyStatus;
+  confidence: number;
+  rootCause: string;
+  reliabilityIndex: number;
+  counterfactual: string; 
+  policyRecommendation: string;
   diseaseRisks: DiseaseRisk[];
   aiSummary: string;
-  confidence: number;
-}
-
-export interface FeedbackLog {
-  predictionId: string;
-  actualStatus: SafetyStatus;
-  isAccurate: boolean;
-  notes: string;
-  timestamp: Date;
+  modelType: string;
 }
